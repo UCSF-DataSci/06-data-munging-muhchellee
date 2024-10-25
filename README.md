@@ -81,18 +81,15 @@
 - **Cleaning Method**: Missing values will be detected and rows with missing values will be imputed with either an "unknown" value (categorical variables) or the median. Missing values in the `year` column will be dropped.
 - **Implementation**:
   ```python
-  def clean_missing_values(df):
-    df = df.dropna(subset=['year'])
-
-    # imputing missing values for categorical columns with "unknown"
-    categorical_columns = df.select_dtypes(include='object').columns
-    df.loc[:, categorical_columns] = df[categorical_columns].fillna("unknown")
-
-    # imputing missing values for numerical columns with the median
-    numerical_columns = df.select_dtypes(include=['float64', 'int64']).columns
-    for col in numerical_columns:
-        median_value = df[col].median()
-        df.loc[:, col] = df[col].fillna(median_value)
+  cleaned_df = df.dropna(subset=['year'])
+  
+  categorical_columns = cleaned_df.select_dtypes(include='object').columns
+  cleaned_df.loc[:, categorical_columns] = df[categorical_columns].fillna("unknown")
+  
+  numerical_columns = cleaned_df.select_dtypes(include=['float64', 'int64']).columns
+  for col in numerical_columns:
+   median_value = cleaned_df[col].median()
+   cleaned_df.loc[:, col] = cleaned_df[col].fillna(median_value)
   ```
 - **Justification**: 28079 rows have at least 1 NA, which is ~22% of our total number of rows. I would consider this too high to be dropping missing values, so in order to preserve as much data as possible, I'll be imputing data. If <5% of rows were NA, I would consider dropping instead. Categorical variables are imputed as "unknown" as a placeholder value while numerical variables are imputed with their median as it is the least affected by outlier values. NA values in the `year` column are dropped as <5% of these rows are NA, and it would not make sense to impute these values as another number (as it could significantly affect temporal or time series analyses) or a placeholder value like "unknown" (as it does not match the column type and would make any temporal or time series analyses very difficult).
 - **Impact**: 
@@ -103,8 +100,7 @@
 - **Cleaning Method**: Rows with future year values will be filtered out from the dataset.
 - **Implementation**:
   ```python
-  def clean_missing_values(df):
-    df = df[df['year'] <= 2024]
+  cleaned_df = cleaned_df[cleaned_df['year'] <= 2024]
   ```
 - **Justification**: 60211 rows have a future year value, which makes up for ~47.9% of our total number of rows. Because this is a rather large proportion, imputing these values might significantly change underlying distribution and trends. As we are still in the exploratory data analysis stage, I would simply filter out these rows in order to look at the current temporal data and would revisit the data once a better understanding of future analysis goals with the dataset is understood.
 - **Impact**: 
@@ -115,7 +111,7 @@
 - **Cleaning Method**: Outliers in the `population` column will be log transformed.
 - **Implementation**:
   ```python
-  df['population'] = np.log1p(df['population'])
+  cleaned_df.loc[:, 'population'] = np.log1p(cleaned_df['population'])
   ```
 - **Justification**: Rather than dropping outliers, which might still hold important information, these values are log transformed instead to minimize the impact of these values on the distribution. 
 - **Impact**: 
@@ -126,50 +122,67 @@
 - **Cleaning Method**: Duplicate rows will be dropped.
 - **Implementation**:
   ```python
-  dropped_duplicates = df.drop_duplicates()
+  cleaned_df = cleaned_df.drop_duplicates()
   ```
 - **Justification**: Duplicate rows are dropped in order to prevent redundant data as it unnecessarily inflates the dataset and can slow down downstream analyses. 
 - **Impact**: 
   - Rows affected: [1355]
-  - Data distribution change: After previous data cleaning steps, 1355 rows are dropped. Since duplicate values were dropped, summary statistics may have changed. 
+  - Data distribution change: After previous data cleaning steps, 1355 rows are dropped. The number of rows after this step is 57950. Since duplicate values were dropped, summary statistics may have changed. 
 
 ### Issue 5: Incorrect Column Types
-- **Cleaning Method**: Duplicate rows will be dropped.
+- **Cleaning Method**: `income_groups` and `gender` are changed to category column types.
 - **Implementation**:
   ```python
-  dropped_duplicates = df.drop_duplicates()
+  cleaned_df.loc[:, 'gender'] = cleaned_df['gender'].astype('int')
+  cleaned_df.loc[:, 'income_groups'] = cleaned_df['income_groups'].astype('category')
   ```
-- **Justification**: Duplicate rows are dropped in order to prevent redundant data as it unnecessarily inflates the dataset and can slow down downstream analyses. 
+- **Justification**: Converting `income_groups` and `gender` to category column types is done as these variables already have a pre-defined set of values that they can take on, and makes it easier for downstream data cleaning and analyses.
 - **Impact**: 
-  - Rows affected: []
-  - Data distribution change: . 
+  - Rows affected: 57950
+  - Data distribution change: No change in data distribution since only the data type was changed.. 
 
 ### Issue 6: Inconsistent Categorical Values
-- **Cleaning Method**: Duplicate rows will be dropped.
+- **Cleaning Method**: Inconsistent categorical values in `income_groups` and `gender` are regrouped or assigned "unknown" values.
 - **Implementation**:
   ```python
   dropped_duplicates = df.drop_duplicates()
   ```
-- **Justification**: Duplicate rows are dropped in order to prevent redundant data as it unnecessarily inflates the dataset and can slow down downstream analyses. 
+- **Justification**: In `income_groups`, the values with typos are fixed so that they can be grouped properly. The '3' in `gender` is assigned to 9 as w do not know what this value corresponds to and can revisit it later upon receiving additional information.. 
 - **Impact**: 
-  - Rows affected: []
-  - Data distribution change: . 
+  - Rows affected: 6286 rows in `gender` and 5959 rows in `income_groups`
+  - Data distribution change: In `income_groups`, all values ending with "_typo" are recategorized amongst the other groups. In `gender`, 3 is simply reassigned to an "unknown" value. The distribution in `income_groups` looks to be about the same otherwise. 
 
 
 
 ## 3. Final State Analysis
 
 ### Dataset Overview
-- **Name**: cleaned_population_data.csv (or whatever you named it)
-- **Rows**: [Your answer]
-- **Columns**: [Your answer]
+- **Name**: cleaned_population_data.csv
+- **Rows**: 57950
+- **Columns**: 5
 
 ### Column Details
-| Column Name | Data Type | Non-Null Count | #Unique Values |  Mean  |
-|-------------|-----------|----------------|----------------|--------|
-| [Column 1]  | [Type]    | [Count]        | [#Unique]      | [Mean] |
-| ...         | ...       | ...            | ...            | ...    |
+#### Numerical
+| Column Name      | Data Type | Non-Null Count | # of Unique Values |  Mean/range  |
+|------------------|-----------|----------------|--------------------|--------------|
+| [age]            | [float64] | [57950]        | [101]              | [50]         |
+| [year]           | [float64] | [57950]        | [75]               | [1950-2024]  |
+| [population]     | [float64] | [57950]        | [54058]            | [14]         |
+
+#### Categorical
+| Column Name      | Data Type | Non-Null Count | Unique Values               |  Proportion  |
+|------------------|-----------|----------------|-----------------------------|--------------|
+| [income_groups]  | [object]  | [119412]       | [8]                         |              |
+|                  |           |                | [low_income]                | [23.76%]     |
+|                  |           |                | [upper_middle_income]       | [23.75%]     |
+|                  |           |                | [high_income]               | [23.72%]     |
+|                  |           |                | [lower_middle_income]       | [23.68%]     |
+|                  |           |                | [unknown]                   | [5.09%]      |
+| [gender]         | [float64] | [119811]       | [3]                         |              |
+|                  |           |                | [1]                         | [45.10%]     |
+|                  |           |                | [2]                         | [49.81%]     |
+|                  |           |                | [9]                         | [5.08%]      |
 
 ### Summary of Changes
-- [List major changes made to the dataset]
-- [Discuss any significant changes in data distribution]
+- Major changes include removal of missing values, filtering out of future years, log transforming the population column, removing duplicate rows, changing income_groups and gender columns to category and integer types, and fixing the inconsistent categorical values in the previously mentioned columns.
+- There were changes to the mean, total unique values, and standard deviation. Redistributing the inconsistent categorical values in income_groups and gender amongst the valid values still kept the underlying distribution relatively the same.
