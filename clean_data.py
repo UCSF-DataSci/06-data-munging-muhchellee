@@ -1,7 +1,5 @@
 """
-This is a script does the following to clean the messy_population.csv file:
-    - Imputes missing values
-    - 
+This is a script that cleans the messy_population.csv file.
 """
 import pandas as pd
 import numpy as np
@@ -10,76 +8,81 @@ import argparse
 from tqdm import tqdm
 import warnings
 
-# default input and output filenames
-DEFAULT_INPUT_FILE = 'messy_population_data.csv'
-DEFAULT_OUTPUT_FILE = 'cleaned_population_data.csv'
+## reading file ##
+df = pd.read_csv('messy_population_data.csv')
 
-def load_data(file_path):
-    """load the original clean dataset"""
-    return pd.read_csv(file_path)
 
-def clean_missing_values(df):
-    """handles missing values"""
-    # dropping rows where year is NA
-    df = df.dropna(subset=['year'])
+## cleaning missing values ##
+cleaned_df = df.dropna(subset=['year'])
 
-    # imputing missing values for categorical columns with "unknown"
-    categorical_columns = df.select_dtypes(include='object').columns
-    df.loc[:, categorical_columns] = df[categorical_columns].fillna("unknown")
+# imputing missing values for categorical columns with "unknown"
+categorical_columns = cleaned_df.select_dtypes(include='object').columns
+cleaned_df.loc[:, categorical_columns] = df[categorical_columns].fillna("unknown")
 
-    # imputing missing values for numerical columns with the median
-    numerical_columns = df.select_dtypes(include=['float64', 'int64']).columns
-    for col in numerical_columns:
-        median_value = df[col].median()
-        df.loc[:, col] = df[col].fillna(median_value)
+# imputing missing values for numerical columns with the median
+numerical_columns = cleaned_df.select_dtypes(include=['float64', 'int64']).columns
+for col in numerical_columns:
+    median_value = cleaned_df[col].median()
+    cleaned_df.loc[:, col] = cleaned_df[col].fillna(median_value)
     
-    return df
 
-def filter_future_years(df):
-    """filters out future year values"""
-    df = df[df['year'] <= 2024]
+## filtering out future year values ##
+cleaned_df = cleaned_df[cleaned_df['year'] <= 2024]
 
-    return df
 
-def log_transform_outliers(df, column_name):
-    """log transforms outliers"""
-    # using np.log1p to handle zero values (log(1 + x)), as log(0) is undefined
-    if column_name in df.columns:
-        df[column_name] = np.log1p(df[column_name])
-    else:
-        print(f"Column '{column_name}' does not exist in the DataFrame.")
+## log transforming population outliers ##
+cleaned_df.loc[:, 'population'] = np.log1p(cleaned_df['population'])
+
+
+## dropping duplicate rows ##
+cleaned_df = cleaned_df.drop_duplicates()
+
+
+## changing income_groups and gender to category type ##
+cleaned_df.loc[:, 'gender'] = cleaned_df['gender'].astype('int')
+cleaned_df.loc[:, 'income_groups'] = cleaned_df['income_groups'].astype('category')
+
+
+## changing inconsistent category types ##
+income_replacements = {
+    "low_income_typo": "low_income",
+    "upper_middle_income_typo": "upper_middle_income",
+    "high_income_typo": "high_income",
+    "lower_middle_income_typo": "lower_middle_income",
+}
     
-    return df
+# replacing 3 in gender with 9
+cleaned_df.loc[:, 'gender'] = cleaned_df['gender'].replace(3, 9)
 
-def drop_duplicate_rows(df):
-    """drops duplicate rows if they exist"""
-    init_row_count = df.shape[0]
-    dropped_duplicates = df.drop_duplicates()
-    final_row_count = dropped_duplicates.shape[0]
-
-    num_duplicates = init_row_count - final_row_count
-    if num_duplicates > 0:
-        print(f"{num_duplicates} duplicate rows removed.")
-    else:
-        print("No duplicate rows found.")
-
-    return dropped_duplicates
-
-def convert_to_categorical(df, columns):
-    """converts specified columns in a df to categorical type"""
-    for col in columns:
-        try:
-            if col in df.columns:
-                # check if the column is already a category
-                if isinstance(df[col].dtype, pd.CategoricalDtype):
-                    warnings.warn(f"Column '{col}' is already of type 'category'.")
-                else:
-                    # convert to categorical
-                    df[col] = df[col].astype('category')
-            else:
-                raise ValueError(f"Column '{col}' not found in DataFrame.")
-        except Exception as e:
-            print(f"Error processing column '{col}': {e}")
+# replacing values in 'income_groups' column
+cleaned_df.loc[:, 'income_groups'] = cleaned_df['income_groups'].replace(income_replacements)
     
-    return df
+# consolidating income_groups
+cleaned_df.loc[:, 'income_groups'] = cleaned_df['income_groups'].replace({
+    "low_income": "low_income",
+    "upper_middle_income": "upper_middle_income",
+    "high_income": "high_income",
+    "lower_middle_income": "lower_middle_income"
+})
 
+
+## saving cleaned file ##
+output_file = 'clean_population_data.csv'
+cleaned_df.to_csv(output_file, index=False)
+print(f"\nClean dataset saved as '{output_file}'")
+
+## printing out data summaries ##
+print(cleaned_df.info())
+print(cleaned_df.describe())
+unique_counts = cleaned_df.nunique()
+print(unique_counts)
+
+# income group proportion
+income_group_proportion = cleaned_df['income_groups'].value_counts(normalize=True) * 100
+print("Proportion of income_groups:")
+print(income_group_proportion)
+
+# gender proportion
+gender_proportion = cleaned_df['gender'].value_counts(normalize=True) * 100
+print("\nProportion of gender:")
+print(gender_proportion)
